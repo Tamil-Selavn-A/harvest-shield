@@ -152,10 +152,22 @@ FALLBACK_HEALTH = {
 # Data access and formatting
 # ---------------------------------------------------------------------------
 def get_json(endpoint):
-    """Return (data, error, source_mode) without hiding API failures."""
+    """Fetch fresh JSON and return (data, error, source_mode).
+
+    Requests are deliberately made on each Streamlit rerun and send no-cache
+    headers. The dashboard does not cache API responses in Streamlit.
+    """
     url = f"{API_BASE_URL}{endpoint}"
     try:
-        response = requests.get(url, timeout=REQUEST_TIMEOUT)
+        response = requests.get(
+            url,
+            timeout=REQUEST_TIMEOUT,
+            headers={
+                "Cache-Control": "no-cache, no-store, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
         response.raise_for_status()
         data = response.json()
         if not isinstance(data, dict):
@@ -393,8 +405,12 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.caption("DATA CONNECTION")
     st.sidebar.code(API_BASE_URL, language=None)
-    if st.sidebar.button("↻ Refresh dashboard", use_container_width=True):
+    if st.sidebar.button("↻ Reload latest data", type="primary", use_container_width=True):
+        st.session_state["hs_last_refresh_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        st.session_state["hs_refresh_count"] = st.session_state.get("hs_refresh_count", 0) + 1
         st.rerun()
+
+    st.sidebar.caption("Reload requests fresh API responses. If demo data is active, the values remain illustrative until the backend is connected.")
     st.sidebar.markdown(
         '<div style="font-size:.73rem;opacity:.72;padding-top:1rem">Decision support prototype · Verify findings in the field</div>',
         unsafe_allow_html=True,
@@ -458,6 +474,10 @@ def main():
     high_count = int(df["Risk key"].isin(["high", "critical"]).sum())
     moderate_count = int(df["Risk key"].isin(["moderate", "medium"]).sum())
     known_count = int((df["Risk key"] != "unknown").sum())
+    ndvi_comparable = df.dropna(subset=["Current NDVI", "Previous NDVI"]).copy()
+    ndvi_declining_count = int(
+        (ndvi_comparable["Current NDVI"] < ndvi_comparable["Previous NDVI"]).sum()
+    )
     total_area_text = f"{total_area:,.1f} ha" if pd.notna(total_area) else "Unavailable"
     selected_options = {
         f"{item.get('field_name') or item['field_id']} · {item['field_id']}": item["field_id"]
@@ -472,29 +492,64 @@ def main():
     st.markdown(
         f"""
         <div class="hero">
-          <div class="hero-kicker">Field operations · Regional monitoring</div>
-          <div class="hero-title">See the field. Understand the risk.<br>Act with clarity.</div>
-          <div class="hero-subtitle">A unified view of field observations, crop-health indicators, and risk-screening guidance for agricultural follow-up.</div>
+          <div class="hero-kicker">AGRICULTURAL INTELLIGENCE · FIELD OPERATIONS</div>
+          <div class="hero-title">From field signals<br>to confident next steps.</div>
+          <div class="hero-subtitle">Bring field inventory, vegetation indicators, weather observations, and explainable risk screening into one operational view. Verify important signals on the ground.</div>
           <div class="hero-foot">
             <span class="hero-chip">🌱 {len(fields)} monitored fields</span>
             <span class="hero-chip">🧭 {known_count} with risk assessments</span>
-            <span class="hero-chip">⏱ Updated this session: {datetime.now().astimezone().strftime('%d %b %Y · %H:%M')}</span>
+            <span class="hero-chip">⏱ Data view loaded: {refresh_display}</span>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    if fields_mode == "sample" or any(b.get("mode") == "sample" for b in health_by_id.values()):
+    refresh_time = st.session_state.get("hs_last_refresh_at")
+    if refresh_time:
+        try:
+            refresh_display = datetime.fromisoformat(refresh_time).astimezone().strftime("%d %b %Y, %H:%M:%S")
+        except (TypeError, ValueError):
+            refresh_display = refresh_time
+    else:
+        refresh_display = datetime.now().astimezone().strftime("%d %b %Y, %H:%M:%S")
+
+    has_sample_data = fields_mode == "sample" or any(
+        bundle.get("mode") == "sample" for bundle in health_by_id.values()
+    )
+    failed_health_count = len(health_errors)
+
+    if has_sample_data:
         st.markdown(
-            '<div class="notice"><b>DEMO MODE:</b> The API could not be reached for at least part of this view. Embedded illustrative sample data is being used; it is not live field, weather, or satellite telemetry.</div>',
+            '<div class="notice"><b>DEMO DATA ACTIVE · NOT LIVE TELEMETRY</b><br>'
+            'The dashboard could not reach the configured API for at least part of this view, so embedded illustrative data is being shown. '
+            'Reloading the page will retry the API, but sample values will not change until a reachable backend returns current data.</div>',
             unsafe_allow_html=True,
+        )
+        if API_BASE_URL.startswith(("http://127.0.0.1", "http://localhost")):
+            st.warning(
+                "Deployment configuration warning: a cloud-hosted Streamlit app cannot reach a backend running on your own computer via "
+                "127.0.0.1/localhost. Set HARVEST_SHIELD_API_URL to a publicly reachable, secured backend URL in the Streamlit app's Secrets/environment."
+            )
+    elif failed_health_count:
+        st.warning(
+            f"The field list loaded, but health data failed for {failed_health_count} field(s). "
+            "Some charts and assessments may be incomplete."
         )
     else:
         st.markdown(
-            '<div class="success-note">Connected to the configured API for the field list. Individual observations are labelled by their reported source below.</div>',
+            '<div class="success-note"><b>API CONNECTED</b> · Field list and available field assessments loaded from the configured backend. '
+            'Individual data sources are labelled in the field profile.</div>',
             unsafe_allow_html=True,
         )
+
+    status_a, status_b, status_c = st.columns([1, 1, 2])
+    with status_a:
+        st.caption(f"**Data mode:** {'Sample / fallback' if has_sample_data else 'API response'}")
+    with status_b:
+        st.caption(f"**Loaded at:** {refresh_display}")
+    with status_c:
+        st.caption(f"**Endpoint:** `{API_BASE_URL}`")
 
     if page == "Overview":
         section_heading("REGIONAL PULSE", "Monitoring overview")
@@ -504,7 +559,7 @@ def main():
         with c2:
             metric_card("Priority fields", str(high_count), "High or critical reported risk", "🚨")
         with c3:
-            metric_card("Moderate risk", str(moderate_count), "Reported moderate classifications", "🟠")
+            metric_card("NDVI trending down", str(ndvi_declining_count), "Comparable current vs previous readings", "🛰️")
         with c4:
             metric_card("Area represented", total_area_text, "Sum of available field areas", "🗺️")
 
@@ -541,6 +596,12 @@ def main():
                         unsafe_allow_html=True,
                     )
             st.caption("Risk labels are screening signals. Confirm field conditions before making management decisions.")
+        if has_sample_data:
+            st.info(
+                "Why values may not change after reload: the app is currently showing its built-in sample dataset. "
+                "A refresh retries the backend connection; it does not generate new observations. "
+                "To see changing/live values, connect the deployed app to the running backend and its data sources."
+            )
 
         st.write("")
         section_heading("FIELD REGISTER", "All monitored fields")
@@ -695,6 +756,7 @@ def main():
             "Current NDVI", "Previous NDVI", "Temperature (°C)", "Rainfall (mm)", "Data mode",
         ]
         export_df = df[export_columns].copy()
+        export_df["Report generated at"] = datetime.now().astimezone().isoformat(timespec="seconds")
         csv_bytes = export_df.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             "⬇ Download fleet report (CSV)",
@@ -716,6 +778,10 @@ def main():
             """
         )
         st.dataframe(export_df, use_container_width=True, hide_index=True)
+        if health_errors:
+            st.warning("Some field health requests failed:")
+            for failed_id, message in health_errors.items():
+                st.write(f"- **{failed_id}:** {message}")
 
     st.divider()
     st.caption(
