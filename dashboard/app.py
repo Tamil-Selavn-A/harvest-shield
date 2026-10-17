@@ -386,6 +386,23 @@ def section_heading(kicker, title):
 def main():
     inject_styles()
 
+    # Define this before rendering the hero banner, which uses refresh_display.
+    # This prevents UnboundLocalError during Streamlit's first execution.
+    refresh_time = st.session_state.get("hs_last_refresh_at")
+    if refresh_time:
+        try:
+            refresh_display = (
+                datetime.fromisoformat(refresh_time)
+                .astimezone()
+                .strftime("%d %b %Y, %H:%M:%S")
+            )
+        except (TypeError, ValueError):
+            refresh_display = str(refresh_time)
+    else:
+        refresh_display = datetime.now().astimezone().strftime(
+            "%d %b %Y, %H:%M:%S"
+        )
+
     st.sidebar.markdown(
         """
         <div style="padding:.5rem 0 1.2rem">
@@ -504,15 +521,6 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-
-    refresh_time = st.session_state.get("hs_last_refresh_at")
-    if refresh_time:
-        try:
-            refresh_display = datetime.fromisoformat(refresh_time).astimezone().strftime("%d %b %Y, %H:%M:%S")
-        except (TypeError, ValueError):
-            refresh_display = refresh_time
-    else:
-        refresh_display = datetime.now().astimezone().strftime("%d %b %Y, %H:%M:%S")
 
     has_sample_data = fields_mode == "sample" or any(
         bundle.get("mode") == "sample" for bundle in health_by_id.values()
