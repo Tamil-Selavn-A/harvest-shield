@@ -1,0 +1,10 @@
+﻿field_id,observation_date,ndvi,data_source,data_status
+TN001,2026-09-01,0.62,synthetic_sample,synthetic
+TN001,2026-09-15,0.68,synthetic_sample,synthetic
+TN001,2026-10-01,0.71,synthetic_sample,synthetic
+TN002,2026-09-01,0.48,synthetic_sample,synthetic
+TN002,2026-09-15,0.52,synthetic_sample,synthetic
+TN002,2026-10-01,0.55,synthetic_sample,synthetic
+TN003,2026-09-01,0.44,synthetic_sample,synthetic
+TN003,2026-09-15,,synthetic_sample,synthetic
+TN003,2026-10-01,0.50,synthetic_sample,synthetic
