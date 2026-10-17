@@ -152,12 +152,7 @@ def get_satellite_observation(
         else None
     )
 
-    data_status = latest_observation["data_status"]
-    if any(
-        observation["data_status"] != data_status
-        for observation in observations
-    ):
-        data_status = "cached"
+    source_observation = latest_measurement or latest_observation
 
     return SatelliteObservation(
         field_id=field_id,
@@ -170,9 +165,7 @@ def get_satellite_observation(
         ndvi_history=[
             observation["ndvi"] for observation in measured_observations
         ],
-        observation_date=latest_observation[
-            "observation_date"
-        ].isoformat(),
-        data_source=latest_observation["data_source"],
-        data_status=data_status,
+        observation_date=source_observation["observation_date"].isoformat(),
+        data_source=source_observation["data_source"],
+        data_status=source_observation["data_status"],
     )
