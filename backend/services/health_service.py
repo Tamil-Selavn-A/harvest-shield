@@ -1,35 +1,46 @@
 from datetime import datetime, timezone
-from typing import Any
 
 from backend.schemas.health_schema import (
     CropHealthResponse,
-    Recommendation,
     RiskAssessment,
     SatelliteObservation,
     WeatherObservation,
 )
 from backend.services.field_service import get_field_by_id
-from backend.services.weather_service import get_weather_for_field, WeatherDataError
+from backend.services.satellite_service import (
+    SatelliteDataError,
+    get_satellite_observation,
+)
+from backend.services.weather_service import (
+    WeatherDataError,
+    get_weather_for_field,
+)
+from backend.services.risk_engine import assess_crop_risk
+from backend.services.recommendation_engine import generate_recommendations
 
 
 def get_crop_health(field_id: str) -> CropHealthResponse | None:
-    """Build an initial crop-health response for a known field.
-
-    Satellite and weather observations are explicitly synthetic placeholders
-    until the corresponding team services are integrated.
-    """
+    """Build a crop-health response using available observations and risk rules."""
 
     field = get_field_by_id(field_id)
 
     if field is None:
         return None
 
-    satellite = SatelliteObservation(
-        field_id=field_id,
-        data_source="synthetic_sample",
-        data_status="synthetic",
-    )
+    # Obtain satellite observations.
+    try:
+        satellite = get_satellite_observation(field_id)
+    except (SatelliteDataError, ValueError):
+        satellite = None
 
+    if satellite is None:
+        satellite = SatelliteObservation(
+            field_id=field_id,
+            data_source="satellite_data_unavailable",
+            data_status="unavailable",
+        )
+
+    # Obtain weather observations.
     try:
         weather = get_weather_for_field(field_id)
     except (WeatherDataError, ValueError):
@@ -44,29 +55,14 @@ def get_crop_health(field_id: str) -> CropHealthResponse | None:
             observation_time=None,
         )
 
-    risk = RiskAssessment(
-        overall_risk="unknown",
-        ndvi_risk="unknown",
-        weather_risk="unknown",
-        disease_risk="unknown",
-        explanation=[
-            "Satellite observations have not yet been integrated.",
-            "Weather observations have not yet been integrated.",
-            "Crop risk cannot be assessed reliably without observations.",
-        ],
+    # Assess risk using both observation models.
+    risk: RiskAssessment = assess_crop_risk(
+        satellite=satellite,
+        weather=weather,
     )
 
-    recommendations = [
-        Recommendation(
-            action="Collect current satellite and weather observations.",
-            priority="medium",
-            reason=(
-                "Risk assessment is unavailable until the required "
-                "observations are integrated."
-            ),
-            triggers=["satellite_data_unavailable", "weather_data_unavailable"],
-        )
-    ]
+    # Generate recommendations from the assessment.
+    recommendations = generate_recommendations(risk)
 
     return CropHealthResponse(
         field=field,
