@@ -31,23 +31,18 @@ def get_crop_health(field_id: str) -> CropHealthResponse | None:
     )
 
     try:
-        weather_data = get_weather_for_field(field_id)
-        weather = WeatherObservation(
-        field_id=field_id,
-        temperature_c=weather_data["temperature_c"],
-        humidity_pct=weather_data["humidity_pct"],
-        recent_rainfall_mm=weather_data["recent_rainfall_mm"],
-        forecast=weather_data["forecast"],
-        data_source=weather_data["data_source"],
-        data_status=weather_data["data_status"],
-        observation_time=weather_data["observation_time"],
-    )
+        weather = get_weather_for_field(field_id)
     except (WeatherDataError, ValueError):
         weather = WeatherObservation(
-        field_id=field_id,
-        data_source="Open-Meteo CSV",
-        data_status="unavailable",
-    )
+            field_id=field_id,
+            temperature_c=None,
+            humidity_pct=None,
+            recent_rainfall_mm=None,
+            forecast=[],
+            data_source="weather_service_error",
+            data_status="unavailable",
+            observation_time=None,
+        )
 
     risk = RiskAssessment(
         overall_risk="unknown",
