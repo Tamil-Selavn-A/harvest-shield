@@ -58,4 +58,4 @@ class CropHealthResponse(BaseModel):
     disclaimer: str = (
         "Risk indicators support decision-making and are not a substitute "
         "for field inspection or professional agricultural advice."
-    )
+    )   
