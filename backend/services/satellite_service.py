@@ -1,4 +1,4 @@
-﻿import csv
+import csv
 import math
 from datetime import date
 from pathlib import Path
@@ -143,6 +143,7 @@ def get_satellite_observation(
     ]
 
     latest_observation = observations[-1]
+
     latest_measurement = (
         measured_observations[-1] if measured_observations else None
     )
@@ -152,12 +153,13 @@ def get_satellite_observation(
         else None
     )
 
-    data_status = latest_observation["data_status"]
-    if any(
-        observation["data_status"] != data_status
-        for observation in observations
-    ):
-        data_status = "cached"
+    source_observation = latest_measurement or latest_observation
+    # Use the provenance of the latest valid NDVI measurement.
+    # If there is no valid measurement, fall back to the latest record.
+    source_observation = latest_measurement or latest_observation
+
+    data_status = source_observation["data_status"]
+    data_source = source_observation["data_source"]
 
     return SatelliteObservation(
         field_id=field_id,
@@ -170,9 +172,7 @@ def get_satellite_observation(
         ndvi_history=[
             observation["ndvi"] for observation in measured_observations
         ],
-        observation_date=latest_observation[
-            "observation_date"
-        ].isoformat(),
-        data_source=latest_observation["data_source"],
-        data_status=data_status,
+        observation_date=source_observation["observation_date"].isoformat(),
+        data_source=source_observation["data_source"],
+        data_status=source_observation["data_status"],
     )
