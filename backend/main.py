@@ -1,4 +1,5 @@
-﻿from fastapi import FastAPI, HTTPException
+﻿from backend.services.health_service import get_crop_health
+from fastapi import FastAPI, HTTPException
 
 from backend.services.field_service import (
     FieldDataError,
@@ -65,3 +66,21 @@ def retrieve_field(field_id: str):
         )
 
     return field
+
+@app.get("/api/health/{field_id}")
+def retrieve_crop_health(field_id: str):
+    try:
+        result = get_crop_health(field_id)
+    except FieldDataError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Field '{field_id}' was not found.",
+        )
+
+    return result
