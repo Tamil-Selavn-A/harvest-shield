@@ -1,0 +1,29 @@
+﻿[
+  {
+    "field_id": "TN001",
+    "field_name": "Demo Rice Field A",
+    "crop_type": "rice",
+    "latitude": 11.0168,
+    "longitude": 76.9558,
+    "area_hectares": 2.0,
+    "data_status": "sample"
+  },
+  {
+    "field_id": "TN002",
+    "field_name": "Demo Millet Field B",
+    "crop_type": "millet",
+    "latitude": 11.0250,
+    "longitude": 76.9600,
+    "area_hectares": 1.5,
+    "data_status": "sample"
+  },
+  {
+    "field_id": "TN003",
+    "field_name": "Demo Groundnut Field C",
+    "crop_type": "groundnut",
+    "latitude": 11.0100,
+    "longitude": 76.9450,
+    "area_hectares": 3.0,
+    "data_status": "sample"
+  }
+]
