@@ -28,7 +28,11 @@ def test_health_endpoint_labels_placeholder_data():
     body = response.json()
 
     assert body["satellite"]["data_status"] == "synthetic"
-    assert body["weather"]["data_status"] == "synthetic"
+    assert body["weather"]["data_status"] == "unavailable"
+    assert body["weather"]["temperature_c"] is None
+    assert body["weather"]["humidity_pct"] is None
+    assert body["weather"]["recent_rainfall_mm"] is None
+    assert body["weather"]["data_source"] == "Open-Meteo CSV"
 
     assert body["satellite"]["ndvi_current"] is None
     assert body["weather"]["temperature_c"] is None
