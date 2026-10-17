@@ -9,6 +9,7 @@ from backend.schemas.health_schema import (
     WeatherObservation,
 )
 from backend.services.field_service import get_field_by_id
+from backend.services.weather_service import get_weather_for_field, WeatherDataError
 
 
 def get_crop_health(field_id: str) -> CropHealthResponse | None:
@@ -29,11 +30,19 @@ def get_crop_health(field_id: str) -> CropHealthResponse | None:
         data_status="synthetic",
     )
 
-    weather = WeatherObservation(
-        field_id=field_id,
-        data_source="synthetic_sample",
-        data_status="synthetic",
-    )
+    try:
+        weather = get_weather_for_field(field_id)
+    except (WeatherDataError, ValueError):
+        weather = WeatherObservation(
+            field_id=field_id,
+            temperature_c=None,
+            humidity_pct=None,
+            recent_rainfall_mm=None,
+            forecast=[],
+            data_source="weather_service_error",
+            data_status="unavailable",
+            observation_time=None,
+        )
 
     risk = RiskAssessment(
         overall_risk="unknown",
