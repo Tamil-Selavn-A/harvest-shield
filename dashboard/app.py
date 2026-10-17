@@ -1,4 +1,3 @@
-
 import os
 
 import requests
@@ -22,7 +21,7 @@ st.set_page_config(
 
 
 def get_json(endpoint):
-    """Fetch JSON from the Harvest Shield API."""
+    """Fetch JSON from the Harvest Shield API, with local fallback for cloud deployments."""
     url = f"{API_BASE_URL}{endpoint}"
 
     try:
@@ -35,10 +34,21 @@ def get_json(endpoint):
 
         return data, None
 
-    except requests.exceptions.Timeout:
-        return None, "The API request timed out. Please try again."
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+        # Fallback for Streamlit Cloud where localhost backend isn't running
+        try:
+            if endpoint == "/api/fields":
+                from backend.services.field_service import get_all_fields
+                fields = get_all_fields()
+                return {"count": len(fields), "fields": fields}, None
+            elif endpoint.startswith("/api/health/"):
+                field_id = endpoint.split("/")[-1]
+                from backend.services.health_service import get_crop_health
+                health_data = get_crop_health(field_id)
+                return health_data, None
+        except Exception:
+            pass
 
-    except requests.exceptions.ConnectionError:
         return None, (
             "Cannot connect to the Harvest Shield API. "
             "Check that the backend is running."
@@ -159,162 +169,73 @@ def main():
     if not isinstance(recommendations, list):
         recommendations = []
 
-    st.header(field.get("field_name") or selected_id)
+    st.header(field.get("field_name", selected_id))
     st.caption(f"Field ID: {selected_id}")
 
-    overview = st.columns(3)
-    overview[0].metric(
-        "Crop type",
-        display_value(field.get("crop_type")),
-    )
-    overview[1].metric(
-        "Field area",
-        display_value(field.get("area_hectares"), " hectares"),
-    )
-    overview[2].metric(
-        "Field metadata",
-        display_data_status(field.get("data_status")),
-    )
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Crop type", display_value(field.get("crop_type")))
+    with col2:
+        area = field.get("area_hectares")
+        st.metric("Field area", display_value(area, " hectares" if area is not None else ""))
+    with col3:
+        st.metric("Field metadata", display_value(field.get("metadata")))
 
     st.subheader("Overall risk assessment")
+    risk_level = risk.get("risk_level", "unknown")
+    st.info(f"Reported risk level: {risk_level.capitalize()}")
 
-    overall_risk = risk.get("overall_risk", "unknown")
-    if not isinstance(overall_risk, str) or not overall_risk.strip():
-        overall_risk = "unknown"
-
-    overall_risk = overall_risk.lower()
-
-    if overall_risk not in {"low", "moderate", "high", "critical", "unknown"}:
-        overall_risk = "unknown"
-
-    if overall_risk == "unknown":
-        st.warning(
-            "Risk assessment unavailable. Do not interpret this as low risk."
-        )
-    else:
-        st.info(f"Reported risk level: {overall_risk.title()}")
-
-    risk_columns = st.columns(3)
-    risk_columns[0].metric(
-        "Vegetation risk",
-        display_value(risk.get("ndvi_risk")),
-    )
-    risk_columns[1].metric(
-        "Weather risk",
-        display_value(risk.get("weather_risk")),
-    )
-    risk_columns[2].metric(
-        "Disease risk",
-        display_value(risk.get("disease_risk")),
-    )
+    rcol1, rcol2, rcol3 = st.columns(3)
+    with rcol1:
+        st.metric("Vegetation risk", display_value(risk.get("vegetation_risk")))
+    with rcol2:
+        st.metric("Weather risk", display_value(risk.get("weather_risk")))
+    with rcol3:
+        st.metric("Disease risk", display_value(risk.get("disease_risk")))
 
     st.subheader("Vegetation indicators")
+    vcol1, vcol2, vcol3 = st.columns(3)
+    with vcol1:
+        st.metric("Current NDVI", display_value(satellite.get("current_ndvi")))
+    with vcol2:
+        st.metric("Previous NDVI", display_value(satellite.get("previous_ndvi")))
+    with vcol3:
+        st.metric("Observation date", display_value(satellite.get("observation_date")))
 
-    satellite_columns = st.columns(3)
-    satellite_columns[0].metric(
-        "Current NDVI",
-        display_value(satellite.get("ndvi_current")),
-    )
-    satellite_columns[1].metric(
-        "Previous NDVI",
-        display_value(satellite.get("ndvi_previous")),
-    )
-    satellite_columns[2].metric(
-        "Observation date",
-        display_value(satellite.get("observation_date")),
-    )
-
-    st.caption(
-        "Satellite source: "
-        f"{display_value(satellite.get('data_source'))} · "
-        f"Status: {display_data_status(satellite.get('data_status'))}"
-    )
-
-    if satellite.get("ndvi_current") is None:
-        st.info(
-            "No current NDVI measurement is available. "
-            "No vegetation-health chart is shown."
-        )
+    sat_status = display_data_status(satellite.get("status"))
+    sat_source = satellite.get("source", "unavailable")
+    st.caption(f"Satellite source: {sat_source} • Status: {sat_status}")
 
     st.subheader("Weather observations")
+    wcol1, wcol2, wcol3 = st.columns(3)
+    with wcol1:
+        temp = weather.get("temperature_c")
+        st.metric("Temperature", display_value(temp, " °C" if temp is not None else ""))
+    with wcol2:
+        humidity = weather.get("humidity_pct")
+        st.metric("Humidity", display_value(humidity, " %" if humidity is not None else ""))
+    with wcol3:
+        rain = weather.get("recent_rainfall_mm")
+        st.metric("Recent rainfall", display_value(rain, " mm" if rain is not None else ""))
 
-    weather_columns = st.columns(3)
-    weather_columns[0].metric(
-        "Temperature",
-        display_value(weather.get("temperature_c"), " °C"),
-    )
-    weather_columns[1].metric(
-        "Humidity",
-        display_value(weather.get("humidity_pct"), " %"),
-    )
-    weather_columns[2].metric(
-        "Recent rainfall",
-        display_value(weather.get("recent_rainfall_mm"), " mm"),
-    )
-
-    st.caption(
-        "Weather source: "
-        f"{display_value(weather.get('data_source'))} · "
-        f"Status: {display_data_status(weather.get('data_status'))}"
-    )
-
-    weather_message = weather.get("message")
-    if isinstance(weather_message, str) and weather_message.strip():
-        if weather.get("data_status") == "unavailable":
-            st.warning(f"Weather data unavailable: {weather_message}")
-        else:
-            st.info(weather_message)
+    weather_status = display_data_status(weather.get("status"))
+    weather_source = weather.get("source", "unavailable")
+    st.caption(f"Weather source: {weather_source} • Status: {weather_status}")
 
     st.subheader("Why this assessment?")
-    explanations = risk.get("explanation")
-
-    if isinstance(explanations, list) and explanations:
-        for explanation in explanations:
-            if isinstance(explanation, str) and explanation.strip():
-                st.write(f"- {explanation}")
+    explanations = risk.get("explanations", [])
+    if explanations:
+        for exp in explanations:
+            st.markdown(f"* {exp}")
     else:
-        st.write("No risk explanation was provided by the API.")
+        st.info("No explanatory notes available.")
 
     st.subheader("Recommended actions")
-
     if recommendations:
-        for index, recommendation in enumerate(recommendations, start=1):
-            if not isinstance(recommendation, dict):
-                continue
-
-            action = recommendation.get("action") or "Action unspecified"
-            priority = recommendation.get("priority") or "unspecified"
-            reason = recommendation.get("reason") or "Reason unavailable"
-
-            with st.expander(
-                f"{index}. {action} — Priority: {priority}",
-                expanded=True,
-            ):
-                st.write(reason)
-
-                triggers = recommendation.get("triggers")
-                if isinstance(triggers, list) and triggers:
-                    st.caption("Triggers: " + ", ".join(map(str, triggers)))
+        for rec in recommendations:
+            st.markdown(f"* {rec}")
     else:
-        st.info("No recommendations were provided by the API.")
-
-    st.subheader("Data provenance")
-    st.write(
-        f"Health response generated: "
-        f"{display_value(health.get('generated_at'))}"
-    )
-    st.caption(
-        "This dashboard displays information supplied by the backend. "
-        "Synthetic and sample data are not verified live observations."
-    )
-
-    st.warning(
-        health.get("disclaimer")
-        or (
-            "Use this dashboard as decision support, not as a substitute "
-            "for field inspection or professional agricultural advice."
-        )
-    )
+        st.info("No recommended actions at this time.")
 
 
 if __name__ == "__main__":
