@@ -1,5 +1,5 @@
 import os
-
+import pandas as pd
 import requests
 import streamlit as st
 
@@ -88,7 +88,6 @@ def get_json(endpoint):
         return data, None
 
     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-        # Fallback for Streamlit Cloud
         if endpoint == "/api/fields":
             return FALLBACK_FIELDS, None
         elif endpoint.startswith("/api/health/"):
@@ -173,6 +172,47 @@ def main():
         st.warning("No fields are currently available from the API.")
         st.stop()
 
+    # --- FLEET OVERVIEW METRICS & CHART ---
+    st.subheader("📊 Fleet Overview & Risk Analytics")
+    
+    # Collect risk levels across all fields for analytics
+    risk_summary = []
+    for f in valid_fields:
+        fid = f["field_id"]
+        # Fetch health for summary
+        h_data, _ = get_json(f"/api/health/{fid}")
+        r_level = "Unknown"
+        if h_data and "risk" in h_data:
+            r_level = h_data["risk"].get("risk_level", "unknown").capitalize()
+        risk_summary.append({
+            "Field ID": fid,
+            "Field Name": f.get("field_name", fid),
+            "Crop": f.get("crop_type", "Unknown"),
+            "Area (Ha)": f.get("area_hectares", 0),
+            "Risk Level": r_level
+        })
+
+    df_summary = pd.DataFrame(risk_summary)
+
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.metric("Total Monitored Fields", len(valid_fields))
+    with col_m2:
+        high_risk_count = len(df_summary[df_summary["Risk Level"] == "High"])
+        st.metric("High-Risk Fields Requiring Attention", high_risk_count)
+    with col_m3:
+        total_area = df_summary["Area (Ha)"].sum()
+        st.metric("Total Monitored Area", f"{total_area} Ha")
+
+    # Display Risk Distribution Chart if data exists
+    if not df_summary.empty:
+        risk_counts = df_summary["Risk Level"].value_counts()
+        st.markdown("**Field Risk Distribution Across Region**")
+        st.bar_chart(risk_counts)
+
+    st.divider()
+
+    # --- FIELD SELECTION ---
     field_options = {
         f"{field.get('field_name') or field['field_id']} "
         f"({field['field_id']})": field["field_id"]
@@ -213,7 +253,7 @@ def main():
     if not isinstance(recommendations, list):
         recommendations = []
 
-    st.header(field.get("field_name", selected_id))
+    st.header(f"🔍 Detailed Inspection: {field.get('field_name', selected_id)}")
     st.caption(f"Field ID: {selected_id}")
 
     col1, col2, col3 = st.columns(3)
@@ -280,6 +320,18 @@ def main():
             st.markdown(f"* {rec}")
     else:
         st.info("No recommended actions at this time.")
+
+    # --- CSV REPORT DOWNLOAD SECTION ---
+    st.divider()
+    st.subheader("📥 Export Inspection Report")
+    csv_data = df_summary.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download Fleet Risk Summary (CSV)",
+        data=csv_data,
+        file_name="harvest_shield_fleet_report.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
 
 
 if __name__ == "__main__":
