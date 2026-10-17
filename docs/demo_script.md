@@ -1,257 +1,140 @@
-﻿# Harvest Shield - Demo Script
+﻿# Harvest Shield — Demo Script
 
+## 1. Demo Objective
 
+Demonstrate the Harvest Shield FastAPI backend, sample field metadata, satellite-related observations, weather observations, preliminary risk assessment, recommendations, error handling, and interactive API documentation.
 
-## 1. Objective
+Harvest Shield is a prototype. Its satellite NDVI history uses synthetic sample data, and its risk rules are preliminary screening rules rather than scientifically validated crop-specific predictions.
 
-
-
-Demonstrate the Harvest Shield FastAPI backend, field metadata, crop-health response, error handling, and interactive API documentation.
-
-
-
-This demo documents the implementation on the feature/qa-docs branch.
-
-
-
-IMPORTANT: Live satellite imagery, live weather observations, and reliable real-time agricultural risk assessment are not currently integrated. The health response uses synthetic placeholder data.
-
-
+Do not describe synthetic satellite observations as live satellite imagery or present risk indicators as confirmed agricultural diagnoses.
 
 ## 2. Start the Backend
 
+Open PowerShell at the repository root — the directory containing `backend`, `data`, and `tests`.
 
+If you need to navigate to your own repository, use your actual local path. For example:
 
-Open PowerShell at the repository root:
+```powershell
+cd "C:\Users\TAMIL\projects\harvest-shield"
+```
 
+If your project uses a virtual environment, activate it using the environment's actual path.
 
+Start the API:
 
-C:\\Users\\harik\\Projects\\harvest-shield-copy
-
-
-
-Run this command:
-
-
-
+```powershell
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
-
-
+```
 
 Keep the terminal running while performing the demo.
 
+If port 8000 is already occupied by the intended application, reuse that server instead of starting a duplicate instance.
 
+If startup fails, resolve the error before continuing.
 
-If the server is already running on port 8000, do not start a second instance.
+## 3. Demonstrate API Health
 
-
-
-## 3. Demo the API Health Check
-
-
-
-Open this address in a browser:
-
-
+Open the following address in a browser:
 
 http://127.0.0.1:8000/health
 
+Expected result: the API returns its health-status response.
 
+Explain that this endpoint checks whether the backend is responding. It does not establish that external data providers are available.
 
-Expected result:
-
-
-
-The API returns a healthy status and identifies the service as harvest-shield-api.
-
-
-
-Explain that this endpoint checks whether the backend API is responding.
-
-
-
-## 4. Demo the Field List
-
-
+## 4. Demonstrate the Field List
 
 Open:
-
-
 
 http://127.0.0.1:8000/api/fields
 
+Expected result: the API returns the available sample field records.
 
+The demonstration dataset includes:
+- TN001 — Demo Rice Field A
+- TN002 — Demo Millet Field B
+- TN003 — Demo Groundnut Field C
 
-Expected result:
+Explain that these are demonstration records loaded from the project's local field dataset, not verified real farms.
 
-
-
-The API returns three sample fields:
-
-
-
-\- TN001 - Demo Rice Field A
-
-\- TN002 - Demo Millet Field B
-
-\- TN003 - Demo Groundnut Field C
-
-
-
-The response includes field metadata such as crop type, coordinates, area, and status.
-
-
-
-Explain that the field list currently comes from the project's local JSON dataset.
-
-
-
-## 5. Demo a Field's Crop-Health Response
-
-
+## 5. Demonstrate Crop Health
 
 Open:
-
-
 
 http://127.0.0.1:8000/api/health/TN001
 
+Inspect the returned JSON.
 
+The integrated response can include:
+- Field metadata.
+- Satellite-related observations and data-status labels.
+- Weather observations and data-status labels.
+- Overall, NDVI, weather, and disease-risk indicators.
+- Explanations and recommendations.
+- A response-generation timestamp and disclaimer.
 
-Expected result:
+Explain the data limitations accurately:
 
+- Satellite NDVI history currently uses synthetic CSV-based observations.
+- Weather status depends on the actual data source and fallback path used for the request.
+- Risk thresholds are preliminary screening rules.
+- Disease risk is not a confirmed diagnosis.
+- Recommendations are suggestions for monitoring and further assessment, not validated agricultural prescriptions.
 
+Do not promise a fixed risk level or exact response values. They can depend on the available observations and service behavior.
 
-The response contains field information, satellite-related data, weather information, risk information, recommendations, a generation timestamp, and a disclaimer.
-
-
-
-Important observations:
-
-
-
-\- Satellite measurements are placeholders and may be null.
-
-\- Weather measurements are placeholders and may be null.
-
-\- The risk status is unknown when sufficient real observations are unavailable.
-
-\- Recommendations are generic and must not be presented as validated agricultural advice.
-
-
-
-Explain that the response demonstrates the intended API structure, not a verified real-time crop diagnosis.
-
-
-
-## 6. Demo an Unknown Field
-
-
+## 6. Demonstrate an Unknown Field
 
 Open:
-
-
 
 http://127.0.0.1:8000/api/health/UNKNOWN999
 
+Expected result: the API should return HTTP 404 for an unknown field, provided the application is running the expected implementation.
 
+Explain that the service should not return a valid crop-health assessment for a field that does not exist in its dataset.
 
-Expected result:
-
-
-
-The API returns HTTP 404 because the requested field does not exist.
-
-
-
-Explain that the backend handles unknown field IDs rather than returning a valid crop-health result for a nonexistent field.
-
-
-
-## 7. Demo Interactive API Documentation
-
-
+## 7. Demonstrate Interactive API Documentation
 
 Open:
 
-
-
 http://127.0.0.1:8000/docs
 
+FastAPI should display its interactive API documentation.
 
+Demonstrate how a developer can:
+- Inspect the available endpoints.
+- Review their response structures.
+- Try supported requests.
+- Inspect HTTP status codes and JSON responses.
 
-Expected result:
+## 8. Run Automated Tests
 
+Stop the server only if necessary; otherwise, use another PowerShell terminal at the repository root.
 
+Run:
 
-FastAPI displays its interactive API documentation.
+```powershell
+python -m pytest -q
+```
 
+Record the actual result from the current branch.
 
-
-Explain that the documentation allows a developer to inspect available endpoints, view request and response formats, and try supported API requests.
-
-
-
-## 8. Automated Test Results
-
-
-
-On the feature/qa-docs branch, the recorded command was:
-
-
-
-python -m pytest -v
-
-
-
-Recorded result: 7 tests passed, with 1 deprecation warning.
-
-
-
-These tests cover the field and health API behavior on this branch.
-
-
-
-The satellite-service branch was tested separately and recorded 15 passing tests with 1 deprecation warning. Those additional satellite-service tests are not part of the feature/qa-docs branch unless the changes are integrated.
-
-
-
-These are recorded results from separate test runs. Run the command again if fresh test evidence is required.
-
-
+Do not reuse historical test counts as evidence of the current branch's status. Record failures and warnings honestly, and investigate failures before presenting the project as passing.
 
 ## 9. Current Limitations
 
-
-
-\- The field dataset contains sample records.
-
-\- The health service returns synthetic placeholder data.
-
-\- Live satellite imagery is not integrated into the health response.
-
-\- Live weather data is not integrated into the health response.
-
-\- Agricultural risk cannot be reliably assessed from the current placeholder measurements.
-
-\- The satellite-service branch contains separate CSV-based NDVI history work; this does not by itself establish live satellite imagery processing.
-
-\- A working Streamlit dashboard has not been verified on this branch.
-
-
+- Field metadata is demonstration data.
+- Satellite NDVI history is synthetic; actual satellite imagery processing has not been demonstrated.
+- Weather observations may depend on provider availability and fallback behavior.
+- Risk thresholds are preliminary and not scientifically validated crop-specific predictions.
+- Disease diagnosis is not implemented.
+- The dashboard and deployment target must be verified separately.
+- A passing backend test suite does not, by itself, prove deployment readiness or end-to-end dashboard integration.
 
 ## 10. Suggested Demo Closing
 
+Harvest Shield demonstrates a prototype workflow for combining field metadata, satellite-related observations, weather information, preliminary risk indicators, and recommendations through an API.
 
+The next improvements include validating risk rules with appropriate agricultural expertise, integrating verified satellite observations, expanding integration testing, and verifying the dashboard and target-platform deployment.
 
-Harvest Shield currently demonstrates the backend API structure, sample field metadata, crop-health response format, basic error handling, and automated tests.
-
-
-
-The next development steps are to integrate verified satellite and weather observations, connect those observations to the health service, validate risk calculations, and verify the dashboard integration.
-
-
-
-All current crop-health outputs should be treated as demonstration data, not as confirmed agricultural assessments.
-
-
+All outputs should be treated as decision-support demonstrations, not confirmed agricultural diagnoses.

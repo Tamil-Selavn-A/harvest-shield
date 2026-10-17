@@ -2,11 +2,11 @@
 
 ## 1. Overview
 
-Harvest Shield is a crop-health monitoring project that provides field metadata and an initial crop-health API response.
+Harvest Shield is a crop-health monitoring prototype that combines field metadata, satellite-related observations, weather observations, preliminary risk assessment, and recommendations through a FastAPI backend.
 
-The current `feature/qa-docs` branch contains a FastAPI backend, JSON-based field metadata, Pydantic response schemas, and automated tests for the field and health endpoints.
+The current implementation is a prototype using demonstration field records and synthetic CSV-based NDVI observations. The weather service can use provider data, cached data, synthetic fallback data, or report unavailable data depending on availability.
 
-The current health assessment is an initial placeholder implementation. It does not yet provide a complete, data-driven crop-health assessment.
+**Important:** Synthetic observations are not verified measurements from real farms or live satellite imagery. Risk thresholds are preliminary screening rules and have not been scientifically validated for individual crops or regions. The system does not diagnose crop diseases.
 
 ## 2. Architecture Components
 
@@ -14,79 +14,114 @@ The current health assessment is an initial placeholder implementation. It does 
 
 File: `backend/main.py`
 
-The API is built with FastAPI.
+The API uses FastAPI to expose HTTP endpoints and delegate work to service functions.
 
-Responsibilities:
-- Expose HTTP endpoints.
-- Call the relevant service functions.
-- Convert field-data errors into HTTP 500 responses.
-- Return HTTP 404 when a requested field does not exist.
+Responsibilities include:
+- Exposing field and crop-health endpoints.
+- Returning structured responses.
+- Handling unknown field IDs.
+- Providing API health and interactive documentation endpoints.
 
 ### 2.2 Field Service
 
 File: `backend/services/field_service.py`
 
-Responsibilities:
-- Load field metadata from `data/fields.json`.
-- Validate the dataset structure.
-- Check required field properties.
-- Detect duplicate field IDs.
-- Validate coordinate ranges and positive field area.
-- Retrieve all fields or look up a field by ID.
+The field service loads and validates field metadata from `data/fields.json`.
 
-The field metadata file contains three demonstration records:
+Responsibilities include:
+- Validating the dataset structure and required properties.
+- Checking field IDs for uniqueness.
+- Validating coordinate ranges and positive field area.
+- Retrieving all fields or looking up a field by ID.
+
+The demonstration dataset includes:
 - TN001 — Demo Rice Field A.
 - TN002 — Demo Millet Field B.
 - TN003 — Demo Groundnut Field C.
 
 These records are sample data, not verified real farms.
 
-### 2.3 Health Service
+### 2.3 Satellite Service
+
+File: `backend/services/satellite_service.py`
+
+The satellite service reads and validates NDVI history from `data/ndvi_history.csv`.
+
+The current dataset contains synthetic observations. This service does not establish that actual satellite imagery is downloaded, processed, or converted into NDVI measurements.
+
+### 2.4 Weather Service
+
+File: `backend/services/weather_service.py`
+
+The weather service obtains observations for a field and labels their data status. Depending on the service path and data availability, results may be live-labelled, cached, synthetic, or unavailable.
+
+A `live` status describes the service's reported data source; it should not be interpreted as a guarantee that all observations are accurate or that the provider is always reachable.
+
+### 2.5 Risk Engine
+
+File: `backend/services/risk_engine.py`
+
+The risk engine evaluates available satellite and weather observations using preliminary rule-based thresholds.
+
+The result includes an overall risk level, separate NDVI and weather risk indicators, a disease-risk status, and explanatory messages.
+
+These thresholds are screening rules for the prototype, not scientifically validated crop-specific predictions.
+
+Disease risk must not be interpreted as a confirmed diagnosis.
+
+### 2.6 Recommendation Engine
+
+File: `backend/services/recommendation_engine.py`
+
+The recommendation engine produces suggested actions based on the risk assessment.
+
+Recommendations are intended to support further monitoring and decision-making. They are not a substitute for field inspection or qualified agricultural advice.
+
+### 2.7 Health Service
 
 File: `backend/services/health_service.py`
 
-Responsibilities:
-- Look up the requested field.
-- Construct a crop-health response.
-- Include satellite and weather placeholders.
-- Return an unknown overall risk when observations are unavailable.
-- Provide an explanatory message and a general recommendation.
-- Include a response-generation timestamp and disclaimer.
+The health service coordinates the field, satellite, weather, risk, and recommendation services.
 
-The current implementation explicitly marks its satellite and weather observations as synthetic.
+For an existing field, it assembles a crop-health response containing:
+- Field metadata.
+- Satellite observations and data-status information.
+- Weather observations and data-status information.
+- Risk indicators and explanations.
+- Recommendations.
+- A generation timestamp and disclaimer.
 
-It does not currently calculate crop risk from measured satellite or weather observations.
+Unavailable observations should be represented explicitly rather than presented as verified measurements.
 
-### 2.4 Response Schemas
+### 2.8 Response Schemas
 
 File: `backend/schemas/health_schema.py`
 
-Pydantic models define the response structure for:
-- Satellite observations.
-- Weather observations.
-- Risk assessments.
-- Recommendations.
-- The combined crop-health response.
+Pydantic models define the response structure for field-related data, satellite observations, weather observations, risk assessments, recommendations, and the combined crop-health response.
 
-The schema supports data-status labels including `live`, `cached`, `synthetic`, and `unavailable`. Supporting a status in the schema does not mean that live data integration is implemented.
+Supported data-status values can include `live`, `cached`, `synthetic`, and `unavailable`. The presence of a status in the schema does not independently verify the origin or accuracy of the data.
 
 ## 3. Data Flow
 
 ### Field Listing
 
-1. A client sends a request to `GET /api/fields`.
-2. The API calls the field service.
+1. A client requests `GET /api/fields`.
+2. The API invokes the field service.
 3. The field service loads and validates `data/fields.json`.
-4. The API returns the field count and field records.
+4. The API returns the available field records.
 
 ### Crop-Health Request
 
 1. A client requests `GET /api/health/{field_id}`.
-2. The API calls `get_crop_health()` in the health service.
+2. The API invokes `get_crop_health()` in the health service.
 3. The health service looks up the field.
-4. If the field exists, the service constructs a response with synthetic satellite and weather placeholders.
-5. The response includes an unknown risk assessment, an explanatory message, a general recommendation, and a disclaimer.
-6. If the field does not exist, the API returns HTTP 404.
+4. The satellite service and weather service attempt to obtain observations.
+5. The risk engine evaluates the available observations.
+6. The recommendation engine generates recommendations from the assessment.
+7. The health service assembles the response with data-status labels, timestamp, and disclaimer.
+8. An unknown field is handled as a not-found request.
+
+The result depends on the available observations and the behavior of each service. Missing data must not be represented as a confirmed healthy condition.
 
 ## 4. API Endpoints
 
@@ -96,91 +131,77 @@ The schema supports data-status labels including `live`, `cached`, `synthetic`, 
 | GET | `/health` | Return API health status |
 | GET | `/api/fields` | List available fields |
 | GET | `/api/fields/{field_id}` | Retrieve a field by ID |
-| GET | `/api/health/{field_id}` | Retrieve the initial crop-health response for a field |
+| GET | `/api/health/{field_id}` | Retrieve a crop-health response |
 
-The endpoint definitions are present in `backend/main.py`.
+Confirm endpoint behavior against `backend/main.py` before relying on this table for a release.
 
-Automated tests cover field listing, retrieval of existing fields, unknown-field handling, and the crop-health response.
+FastAPI interactive documentation is available at `/docs` while the server is running.
 
-## 5. Satellite-Service Integration Status
+## 5. Data Sources and Limitations
 
-The satellite NDVI service was inspected on the separate `feature/satellite-service` branch.
+### Satellite-related data
+- NDVI history is read from a CSV dataset.
+- The current sample observations are synthetic.
+- Live satellite imagery acquisition and image-derived NDVI processing have not been demonstrated.
 
-That branch contains:
-- `backend/services/satellite_service.py`
-- `data/ndvi_history.csv`
-- `tests/test_satellite.py`
+### Weather data
+- The service supports different data-source and fallback paths.
+- The reported source and status should be inspected in each response.
+- Provider availability and observation accuracy are not guaranteed.
 
-The service reads and validates NDVI records from a CSV file. The inspected dataset contains synthetic observations for TN001, TN002, and TN003.
+### Risk and recommendations
+- Thresholds are preliminary screening rules.
+- Crop-specific validation has not been established.
+- Disease diagnosis is not implemented.
+- Recommendations are not validated agricultural prescriptions.
 
-The satellite service was not present in the tracked files on the `feature/qa-docs` branch when this document was prepared. The health service on that branch does not call the satellite service.
+### Field records
+- Field metadata is demonstration data.
+- The sample records do not establish the existence or condition of real farms.
 
-Therefore, the following capabilities must not be presented as completed on the current branch:
-- Integration of NDVI observations into the health endpoint.
-- Processing or downloading actual satellite imagery.
-- Live satellite-data retrieval.
-- Live weather-data integration.
-- Risk calculations based on real observations.
+## 6. Error Handling and Validation
 
-The branch comparison does not itself establish whether these changes have been merged into another branch on the remote repository.
+The field service validates dataset structure, required properties, field IDs, coordinates, and field area.
 
-## 6. Error Handling and Data Validation
+The API should distinguish an unknown field from service failures and unavailable observations. Error responses should not expose credentials or other sensitive configuration.
 
-The field service checks:
-- Whether the JSON file can be loaded.
-- Whether the top-level dataset is a list.
-- Whether required field properties exist.
-- Whether field IDs are non-empty and unique.
-- Whether latitude and longitude are within valid ranges.
-- Whether field area is numeric and positive.
+Integration tests should cover missing fields, unavailable data sources, invalid data, and service exceptions.
 
-The API returns:
-- HTTP 404 when a requested field is not found.
-- HTTP 500 when the field service raises `FieldDataError`.
+## 7. Testing
 
-Further validation of every field property and additional integration-level error handling may be needed as the application develops.
+Run the test suite from the repository root:
 
-## 7. Automated Test Evidence
+```powershell
+python -m pytest -q
+```
 
-Environment observed during testing:
-- Python 3.13.1
-- Pytest 9.1.1
+The result must be recorded from a fresh run on the exact branch being evaluated.
 
-On `feature/qa-docs`, the command `python -m pytest -v` completed with:
+Historical test results from other branches are not evidence that the current integrated branch passes. Record failures and warnings as well as the number of passing tests.
 
-- 7 tests passed.
-- 1 Starlette deprecation warning.
-- No test failures.
+## 8. Deployment and Operations
 
-The seven tests covered the field and health APIs.
+Before deployment:
+- Install dependencies using the project's verified dependency instructions.
+- Run the automated tests.
+- Verify required configuration and environment variables.
+- Confirm the application starts successfully.
+- Check that the dashboard and backend use the correct service URL.
+- Validate behavior when external data providers are unavailable.
+- Verify the intended LinuxONE environment and deployment requirements.
 
-A separate run on `feature/satellite-service` completed with 15 tests passed and the same deprecation warning. That result includes the satellite tests and must not be attributed to `feature/qa-docs`.
+Deployment readiness must not be claimed until the target environment has been tested.
 
-These results record the observed state at the time of testing; they do not establish that every feature has been tested.
+## 9. Future Improvements
 
-## 8. Known Limitations
-
-1. Field records are demonstration data.
-2. The health service returns synthetic satellite and weather placeholders.
-3. The overall risk is reported as unknown.
-4. The health service does not currently use the separate NDVI service on the inspected branches.
-5. Actual satellite imagery processing has not been demonstrated.
-6. Live weather integration has not been demonstrated.
-7. The Starlette test client emits a deprecation warning in the tested environment.
-8. Dependency installation instructions and deployment readiness have not yet been verified.
-
-## 9. Future Integration Work
-
-Potential follow-up work, subject to team agreement:
-- Integrate the satellite service with the health service.
-- Connect a weather-data provider.
-- Define and validate risk-assessment rules.
-- Expand integration and error-handling tests.
-- Document dependency installation and application startup.
-- Verify deployment requirements and target-platform access.
-
-These are follow-up tasks, not claims of completed functionality.
+Potential future work includes:
+- Integrating verified satellite imagery and documented NDVI processing.
+- Validating crop-specific thresholds with appropriate agricultural expertise.
+- Improving data provenance and observation timestamps.
+- Expanding integration tests and monitoring.
+- Completing and verifying the dashboard integration.
+- Validating deployment on the target platform.
 
 ## 10. Disclaimer
 
-Crop-health indicators and recommendations are intended to support decision-making. They are not a substitute for field inspection or professional agricultural advice.
+Harvest Shield is a prototype for crop-health monitoring and decision support. Its outputs are not confirmed agricultural diagnoses, and its recommendations do not replace field inspection or professional agricultural advice.
