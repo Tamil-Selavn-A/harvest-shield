@@ -1,0 +1,21 @@
+HARVEST SHIELD - IBM LINUXONE WORKFLOW
+2026-10-18T00:52:04+00:00
+
+=== ARCHITECTURE ===
+s390x
+
+=== PYTHON ===
+Python 3.12.3
+
+=== GIT REVISION ===
+d99ed7d additional features
+
+=== BACKEND HEALTH ===
+{"status":"healthy","service":"harvest-shield-api"}
+
+=== FIELD DATA ===
+{"count":3,"fields":[{"field_id":"TN001","field_name":"Demo Rice Field A","crop_type":"rice","latitude":11.0168,"longitude":76.9558,"area_hectares":2.0,"data_status":"sample"},{"field_id":"TN002","field_name":"Demo Millet Field B","crop_type":"millet","latitude":11.025,"longitude":76.96,"area_hectares":1.5,"data_status":"sample"},{"field_id":"TN003","field_name":"Demo Groundnut Field C","crop_type":"groundnut","latitude":11.01,"longitude":76.945,"area_hectares":3.0,"data_status":"sample"}]}
+
+=== TEST RESULTS ===
+..................................................                       [100%]
+50 passed in 0.26s
